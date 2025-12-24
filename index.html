@@ -3,155 +3,148 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>华丽星梦圣诞树 Pro</title>
+    <title>华丽星梦圣诞树 Pro (交互版)</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
-        #video-container { position: absolute; width: 80px; height: 80px; bottom: 20px; right: 20px; border: 1px solid #fff; border-radius: 50%; z-index: 10; transform: scaleX(-1); overflow: hidden; opacity: 0.7; }
+        #video-container { position: absolute; width: 80px; height: 80px; bottom: 20px; right: 20px; border: 1px solid rgba(255,255,255,0.5); border-radius: 50%; z-index: 10; transform: scaleX(-1); overflow: hidden; opacity: 0.7; }
         .hint { position: absolute; top: 10%; width: 100%; text-align: center; color: #fff; font-family: sans-serif; pointer-events: none; text-shadow: 0 0 15px #00ff88; font-size: 1rem; z-index: 5; }
-        #start-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 15px 30px; background: #00ff88; color: #000; border: none; border-radius: 25px; font-weight: bold; cursor: pointer; z-index: 20; box-shadow: 0 0 20px #00ff88; }
     </style>
 </head>
 <body>
-    <button id="start-btn">开启圣诞惊喜</button>
     <div class="hint">展示手掌：聚拢圣诞树 | 食指指点：放大查看照片</div>
     <video id="input_video" style="display:none" playsinline></video>
     <div id="video-container"><canvas id="output_canvas" style="width:100%; height:100%"></canvas></div>
-
-    <audio id="audio" loop><source src="bgm.mp3" type="audio/mpeg"></audio>
 
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
-        const startBtn = document.getElementById('start-btn');
-        const audio = document.getElementById('audio');
-        
-        startBtn.onclick = () => {
-            audio.play().catch(() => console.log("等待交互播放"));
-            startBtn.style.display = 'none';
-            initApp();
-        };
+        // 场景初始化
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
 
-        function initApp() {
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
+        // 1. 华丽粒子系统配置
+        const particleCount = 8000;
+        const geometry = new THREE.BufferGeometry();
+        const targetPos = new Float32Array(particleCount * 3);
+        const starPos = new Float32Array(particleCount * 3); 
+        const colors = new Float32Array(particleCount * 3);
 
-            // 1. 华丽粒子系统
-            const particleCount = 8000;
-            const geometry = new THREE.BufferGeometry();
-            const pos = new Float32Array(particleCount * 3);
-            const targetPos = new Float32Array(particleCount * 3);
-            const starPos = new Float32Array(particleCount * 3); 
-            const colors = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount; i++) {
+            // 圣诞树形状 (聚合目标)
+            const h = Math.random() * 12;
+            const r = (12 - h) * 0.35;
+            const t = Math.random() * Math.PI * 2;
+            targetPos[i*3] = Math.cos(t) * r;
+            targetPos[i*3+1] = h - 6;
+            targetPos[i*3+2] = Math.sin(t) * r;
 
-            for (let i = 0; i < particleCount; i++) {
-                // 圣诞树形状
-                const h = Math.random() * 12;
-                const r = (12 - h) * 0.35;
-                const t = Math.random() * Math.PI * 2;
-                targetPos[i*3] = Math.cos(t) * r;
-                targetPos[i*3+1] = h - 6;
-                targetPos[i*3+2] = Math.sin(t) * r;
+            // 星光散开形状 (初始状态)
+            const radius = 15 + Math.random() * 10;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.random() * Math.PI;
+            starPos[i*3] = radius * Math.sin(phi) * Math.cos(theta);
+            starPos[i*3+1] = radius * Math.sin(phi) * Math.sin(theta);
+            starPos[i*3+2] = radius * Math.cos(phi);
 
-                // 初始星光散开形状
-                const radius = 15 + Math.random() * 10;
-                const theta = Math.random() * Math.PI * 2;
-                const phi = Math.random() * Math.PI;
-                starPos[i*3] = radius * Math.sin(phi) * Math.cos(theta);
-                starPos[i*3+1] = radius * Math.sin(phi) * Math.sin(theta);
-                starPos[i*3+2] = radius * Math.cos(phi);
-
-                // 华丽配色
-                const colorSet = [0x00ff88, 0xffd700, 0xffffff, 0xff4444];
-                const c = new THREE.Color(colorSet[Math.floor(Math.random()*4)]);
-                colors[i*3] = c.r; colors[i*3+1] = c.g; colors[i*3+2] = c.b;
-            }
-
-            geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(starPos), 3));
-            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-            const material = new THREE.PointsMaterial({ size: 0.05, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending });
-            const points = new THREE.Points(geometry, material);
-            scene.add(points);
-
-            // 2. 加载你上传的照片
-            const photos = [];
-            const photoFiles = ['ZHY.png', 'ZJ.jpeg', 'love.jpeg'];
-            const loader = new THREE.TextureLoader();
-            
-            photoFiles.forEach((file, i) => {
-                loader.load(file, (texture) => {
-                    const mesh = new THREE.Mesh(
-                        new THREE.PlaneGeometry(3, 4),
-                        new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, opacity: 0 })
-                    );
-                    // 环绕排列
-                    const angle = (i / photoFiles.length) * Math.PI * 2;
-                    mesh.position.set(Math.cos(angle) * 7, 1, Math.sin(angle) * 7);
-                    scene.add(mesh);
-                    photos.push(mesh);
-                });
-            });
-
-            camera.position.z = 18;
-
-            // 3. 手势识别
-            let handX = 0, handY = 0, isHand = false;
-            const videoElement = document.getElementById('input_video');
-            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-            hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7 });
-            hands.onResults(res => {
-                isHand = res.multiHandLandmarks.length > 0;
-                if(isHand) {
-                    const tip = res.multiHandLandmarks[0][8]; // 食指尖
-                    handX = (0.5 - tip.x) * 35; 
-                    handY = (0.5 - tip.y) * 25;
-                }
-            });
-
-            const cam = new Camera(videoElement, {
-                onFrame: async () => { await hands.send({image: videoElement}); },
-                width: 640, height: 480
-            });
-            cam.start();
-
-            // 4. 动画逻辑
-            let lerpVal = 0;
-            function animate() {
-                requestAnimationFrame(animate);
-                lerpVal = THREE.MathUtils.lerp(lerpVal, isHand ? 1 : 0, 0.05);
-                
-                const p = geometry.attributes.position;
-                for (let i = 0; i < particleCount * 3; i++) {
-                    p.array[i] = THREE.MathUtils.lerp(starPos[i], targetPos[i], lerpVal);
-                    // 星光闪烁：在散开状态下加入随机位移
-                    if(lerpVal < 0.1) {
-                        p.array[i] += (Math.random() - 0.5) * 0.05;
-                    }
-                }
-                p.needsUpdate = true;
-                points.rotation.y += 0.003;
-
-                // 照片交互控制
-                photos.forEach(mesh => {
-                    mesh.material.opacity = lerpVal;
-                    const dist = Math.sqrt(Math.pow(handX - mesh.position.x, 2) + Math.pow(handY - mesh.position.y, 2));
-                    if(isHand && dist < 5) {
-                        mesh.scale.lerp(new THREE.Vector3(1.8, 1.8, 1.8), 0.1);
-                        mesh.lookAt(camera.position);
-                    } else {
-                        mesh.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
-                        mesh.rotation.y += 0.01;
-                    }
-                });
-
-                renderer.render(scene, camera);
-            }
-            animate();
+            // 华丽配色：翡翠绿、黄金、钻白、红
+            const colorSet = [0x00ff88, 0xffd700, 0xffffff, 0xff4444];
+            const c = new THREE.Color(colorSet[Math.floor(Math.random()*4)]);
+            colors[i*3] = c.r; colors[i*3+1] = c.g; colors[i*3+2] = c.b;
         }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(starPos), 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        const material = new THREE.PointsMaterial({ size: 0.05, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending });
+        const points = new THREE.Points(geometry, material);
+        scene.add(points);
+
+        // 2. 加载照片 (对应你上传的文件名)
+        const photos = [];
+        const photoFiles = ['ZHY.png', 'ZJ.jpeg', 'love.jpeg'];
+        const loader = new THREE.TextureLoader();
+        
+        photoFiles.forEach((file, i) => {
+            loader.load(file, (texture) => {
+                const mesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(3, 4),
+                    new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, opacity: 0 })
+                );
+                // 环绕排列
+                const angle = (i / photoFiles.length) * Math.PI * 2;
+                mesh.position.set(Math.cos(angle) * 7, 1, Math.sin(angle) * 7);
+                scene.add(mesh);
+                photos.push(mesh);
+            });
+        });
+
+        camera.position.z = 18;
+
+        // 3. 手势识别逻辑
+        let handX = 0, handY = 0, isHand = false;
+        const videoElement = document.getElementById('input_video');
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 1, minDetectionConfidence: 0.7 });
+        hands.onResults(res => {
+            isHand = res.multiHandLandmarks.length > 0;
+            if(isHand) {
+                const tip = res.multiHandLandmarks[0][8]; // 食指尖
+                handX = (0.5 - tip.x) * 35; 
+                handY = (0.5 - tip.y) * 25;
+            }
+        });
+
+        const cam = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        cam.start();
+
+        // 4. 动画循环
+        let lerpVal = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            // 平滑过渡
+            lerpVal = THREE.MathUtils.lerp(lerpVal, isHand ? 1 : 0, 0.05);
+            
+            const p = geometry.attributes.position;
+            for (let i = 0; i < particleCount * 3; i++) {
+                p.array[i] = THREE.MathUtils.lerp(starPos[i], targetPos[i], lerpVal);
+                // 星光闪烁特效
+                if(lerpVal < 0.2) {
+                    p.array[i] += (Math.random() - 0.5) * 0.06;
+                }
+            }
+            p.needsUpdate = true;
+            points.rotation.y += 0.003;
+
+            // 照片交互逻辑
+            photos.forEach(mesh => {
+                mesh.material.opacity = lerpVal;
+                // 检测食指位置与照片位置的距离
+                const dist = Math.sqrt(Math.pow(handX - mesh.position.x, 2) + Math.pow(handY - mesh.position.y, 2));
+                if(isHand && dist < 5) {
+                    mesh.scale.lerp(new THREE.Vector3(1.8, 1.8, 1.8), 0.1);
+                    mesh.lookAt(camera.position);
+                } else {
+                    mesh.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+                    mesh.rotation.y += 0.01; // 闲置时自动缓慢旋转
+                }
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
     </script>
 </body>
 </html>
