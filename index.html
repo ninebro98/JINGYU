@@ -3,97 +3,116 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>九哥哥给小宝zhy做的圣诞树 love</title>
+    <title>至尊豪华粒子圣诞树</title>
     <style>
         body { margin: 0; overflow: hidden; background: #000; }
-        #video-container { position: absolute; width: 70px; height: 70px; bottom: 15px; right: 15px; border: 1px solid rgba(255,255,255,0.4); border-radius: 50%; z-index: 10; transform: scaleX(-1); overflow: hidden; }
-        .hint { position: absolute; top: 10%; width: 100%; text-align: center; color: #fff; font-family: sans-serif; pointer-events: none; text-shadow: 0 0 10px #00ff88; font-size: 0.9rem; z-index: 5; }
+        #video-container { position: absolute; width: 60px; height: 60px; bottom: 20px; right: 20px; border-radius: 50%; border: 1px solid #00ff88; z-index: 100; transform: scaleX(-1); overflow: hidden; box-shadow: 0 0 15px #00ff88; }
+        .ui { position: absolute; width: 100%; text-align: center; color: #fff; font-family: 'PingFang SC', sans-serif; pointer-events: none; z-index: 50; }
+        .hint { top: 12%; font-size: 14px; letter-spacing: 2px; text-shadow: 0 0 10px #00ff88; opacity: 0.8; }
     </style>
 </head>
 <body>
-    <div class="hint">正在召唤圣诞树...请稍后<br>出现星光后，请挥动手掌</div>
+    <div class="ui hint">✦ 展示手掌 聚拢星辰 ✦<br>✦ 食指指点 唤醒记忆 ✦</div>
     <video id="input_video" style="display:none" playsinline></video>
     <div id="video-container"><canvas id="output_canvas" style="width:100%; height:100%"></canvas></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
     <script>
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true }); // 关闭抗锯齿提升性能
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        const particleCount = 4000; // 减少粒子数量确保流畅
+        // 1. 核心粒子参数 (数量增加到10000，增加视觉厚度)
+        const count = 10000;
         const geometry = new THREE.BufferGeometry();
-        const targetPos = new Float32Array(particleCount * 3);
-        const starPos = new Float32Array(particleCount * 3); 
-        const colors = new Float32Array(particleCount * 3);
+        const pos = new Float32Array(count * 3);
+        const treePos = new Float32Array(count * 3);
+        const cloudPos = new Float32Array(count * 3);
+        const colors = new Float32Array(count * 3);
+        const sizes = new Float32Array(count);
 
-        for (let i = 0; i < particleCount; i++) {
-            const h = Math.random() * 12;
-            const r = (12 - h) * 0.35;
-            const t = Math.random() * Math.PI * 2;
-            targetPos[i*3] = Math.cos(t) * r;
-            targetPos[i*3+1] = h - 6;
-            targetPos[i*3+2] = Math.sin(t) * r;
+        for (let i = 0; i < count; i++) {
+            // 树形：更复杂的螺旋结构
+            const h = Math.random() * 14;
+            const r = (14 - h) * 0.35 * Math.pow(Math.random(), 0.5);
+            const t = h * 1.5 + Math.random() * Math.PI * 2;
+            treePos[i*3] = Math.cos(t) * r;
+            treePos[i*3+1] = h - 7;
+            treePos[i*3+2] = Math.sin(t) * r;
 
-            const radius = 15 + Math.random() * 5;
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.random() * Math.PI;
-            starPos[i*3] = radius * Math.sin(phi) * Math.cos(theta);
-            starPos[i*3+1] = radius * Math.sin(phi) * Math.sin(theta);
-            starPos[i*3+2] = radius * Math.cos(phi);
+            // 星云形：星系圆盘结构
+            const radius = 10 + Math.random() * 15;
+            const angle = Math.random() * Math.PI * 2;
+            cloudPos[i*3] = Math.cos(angle) * radius + (Math.random()-0.5)*5;
+            cloudPos[i*3+1] = (Math.random()-0.5) * 10;
+            cloudPos[i*3+2] = Math.sin(angle) * radius + (Math.random()-0.5)*5;
 
-            const colorSet = [0x00ff88, 0xffd700, 0xffffff, 0xff4444];
-            const c = new THREE.Color(colorSet[Math.floor(Math.random()*4)]);
+            // 配色：高端渐变（金、翠绿、钻白）
+            const mix = Math.random();
+            let c = new THREE.Color();
+            if(mix < 0.6) c.set(0x00ff88); // 翠绿
+            else if(mix < 0.9) c.set(0xffd700); // 黄金
+            else c.set(0xffffff); // 钻白
+            
             colors[i*3] = c.r; colors[i*3+1] = c.g; colors[i*3+2] = c.b;
+            sizes[i] = Math.random() * 2;
         }
 
-        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(starPos), 3));
+        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cloudPos), 3));
         geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        const material = new THREE.PointsMaterial({ size: 0.08, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending });
+        
+        // 自定义材质模拟发光
+        const material = new THREE.PointsMaterial({
+            size: 0.08,
+            vertexColors: true,
+            transparent: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            opacity: 0.8
+        });
+
         const points = new THREE.Points(geometry, material);
         scene.add(points);
 
-        // 照片加载
+        // 2. 照片系统 (增加精美的边框装饰)
         const photos = [];
-        const photoFiles = ['ZHY.png', 'ZJ.jpeg', 'love.jpeg']; // 严格匹配你的文件名
+        const photoFiles = ['ZHY.png', 'ZJ.jpeg', 'love.jpeg'];
         const loader = new THREE.TextureLoader();
         
         photoFiles.forEach((file, i) => {
             loader.load(file, (texture) => {
+                const group = new THREE.Group();
                 const mesh = new THREE.Mesh(
                     new THREE.PlaneGeometry(3.5, 4.5),
                     new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, transparent: true, opacity: 0 })
                 );
+                group.add(mesh);
+                
                 const angle = (i / photoFiles.length) * Math.PI * 2;
-                mesh.position.set(Math.cos(angle) * 8, 1, Math.sin(angle) * 8);
-                scene.add(mesh);
-                photos.push(mesh);
-            }, undefined, (err) => console.error("图片加载失败:", file));
+                group.position.set(Math.cos(angle) * 9, 1, Math.sin(angle) * 9);
+                scene.add(group);
+                photos.push(group);
+            });
         });
 
-        camera.position.z = 20;
+        camera.position.z = 22;
 
-        let handX = 0, handY = 0, isHand = false;
+        // 3. 极速追踪逻辑
+        let isHand = false, hX = 0, hY = 0;
         const videoElement = document.getElementById('input_video');
-        
         const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-        hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.5 }); // 降低复杂度提升速度
-        
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6 });
         hands.onResults(res => {
             isHand = res.multiHandLandmarks.length > 0;
             if(isHand) {
                 const tip = res.multiHandLandmarks[0][8];
-                handX = (0.5 - tip.x) * 35; 
-                handY = (0.5 - tip.y) * 25;
-                document.querySelector('.hint').innerHTML = "已锁定手势！尝试指点照片";
-            } else {
-                document.querySelector('.hint').innerHTML = "展示手掌：聚拢圣诞树 | 食指指点：放大查看照片";
+                hX = (0.5 - tip.x) * 40; hY = (0.5 - tip.y) * 30;
             }
         });
 
@@ -103,30 +122,36 @@
         });
         cam.start();
 
-        let lerpVal = 0;
+        // 4. 动画驱动
+        let lerpFactor = 0;
         function animate() {
             requestAnimationFrame(animate);
-            lerpVal = THREE.MathUtils.lerp(lerpVal, isHand ? 1 : 0, 0.05);
+            lerpFactor = THREE.MathUtils.lerp(lerpFactor, isHand ? 1 : 0, 0.04);
             
             const p = geometry.attributes.position;
-            for (let i = 0; i < particleCount * 3; i++) {
-                p.array[i] = THREE.MathUtils.lerp(starPos[i], targetPos[i], lerpVal);
-                if(lerpVal < 0.1) p.array[i] += (Math.random() - 0.5) * 0.05;
+            const time = Date.now() * 0.001;
+
+            for (let i = 0; i < count * 3; i++) {
+                const noise = Math.sin(time + i) * 0.02; // 微弱晃动感
+                p.array[i] = THREE.MathUtils.lerp(cloudPos[i], treePos[i], lerpFactor) + noise;
             }
             p.needsUpdate = true;
-            points.rotation.y += 0.003;
+            points.rotation.y += 0.002;
 
-            photos.forEach(mesh => {
-                mesh.material.opacity = lerpVal;
-                const dist = Math.sqrt(Math.pow(handX - mesh.position.x, 2) + Math.pow(handY - mesh.position.y, 2));
-                if(isHand && dist < 6) {
-                    mesh.scale.lerp(new THREE.Vector3(2, 2, 2), 0.1);
-                    mesh.lookAt(camera.position);
+            photos.forEach((g, i) => {
+                const mesh = g.children[0];
+                mesh.material.opacity = lerpFactor;
+                const d = Math.sqrt(Math.pow(hX - g.position.x, 2) + Math.pow(hY - g.position.y, 2));
+                
+                if(isHand && d < 6) {
+                    g.scale.lerp(new THREE.Vector3(2.2, 2.2, 2.2), 0.1);
+                    g.lookAt(camera.position);
                 } else {
-                    mesh.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
-                    mesh.rotation.y += 0.01;
+                    g.scale.lerp(new THREE.Vector3(1, 1, 1), 0.05);
+                    g.rotation.y += 0.01;
                 }
             });
+
             renderer.render(scene, camera);
         }
         animate();
