@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini 手势圣诞树</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; }
+        #video-container { position: absolute; width: 120px; height: 90px; bottom: 10px; right: 10px; border: 2px solid #fff; z-index: 10; transform: scaleX(-1); }
+        canvas { display: block; }
+        .hint { position: absolute; top: 20px; width: 100%; text-align: center; color: white; font-family: sans-serif; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div class="hint">展示你的手掌，粒子将聚合成圣诞树 🎄</div>
+    <video id="input_video" style="display:none"></video>
+    <div id="video-container"><canvas id="output_canvas" style="width:100%; height:100%"></canvas></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        // --- 1. 初始化 Three.js 场景 ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const particleCount = 3000;
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const treePositions = new Float32Array(particleCount * 3);
+        const randomPositions = new Float32Array(particleCount * 3);
+
+        // 生成圣诞树形状的坐标逻辑
+        for (let i = 0; i < particleCount; i++) {
+            // 圣诞树算法 (简单的圆锥分层)
+            const y = Math.random() * 10 - 5; 
+            const radius = (5 - y) * 0.4; 
+            const theta = Math.random() * Math.PI * 2;
+            
+            treePositions[i*3] = Math.cos(theta) * radius;
+            treePositions[i*3+1] = y;
+            treePositions[i*3+2] = Math.sin(theta) * radius;
+
+            // 初始随机位置
+            randomPositions[i*3] = (Math.random() - 0.5) * 20;
+            randomPositions[i*3+1] = (Math.random() - 0.5) * 20;
+            randomPositions[i*3+2] = (Math.random() - 0.5) * 20;
+        }
+
+        geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(randomPositions), 3));
+        const material = new THREE.PointsMaterial({ color: 0x00ff88, size: 0.05, transparent: true });
+        const points = new THREE.Points(geometry, material);
+        scene.add(points);
+
+        camera.position.z = 15;
+
+        // --- 2. 手势识别逻辑 ---
+        let isHandVisible = false;
+        const videoElement = document.getElementById('input_video');
+        
+        function onResults(results) {
+            isHandVisible = results.multiHandLandmarks.length > 0;
+        }
+
+        const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5 });
+        hands.onResults(onResults);
+
+        const cam = new Camera(videoElement, {
+            onFrame: async () => { await hands.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        cam.start();
+
+        // --- 3. 动画循环 ---
+        let lerpFactor = 0;
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // 平滑过渡：手在时 lerp 到 1，不在时到 0
+            lerpFactor += (isHandVisible ? 0.05 : -0.05);
+            lerpFactor = THREE.MathUtils.clamp(lerpFactor, 0, 1);
+
+            const posAttr = geometry.attributes.position;
+            for (let i = 0; i < particleCount * 3; i++) {
+                posAttr.array[i] = THREE.MathUtils.lerp(randomPositions[i], treePositions[i], lerpFactor);
+                // 添加一点微弱的上下浮动感
+                posAttr.array[i] += Math.sin(Date.now() * 0.001 + i) * 0.002;
+            }
+            posAttr.needsUpdate = true;
+            
+            points.rotation.y += 0.005; // 缓慢旋转
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
