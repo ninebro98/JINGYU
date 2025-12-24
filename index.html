@@ -3,32 +3,32 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <title>至尊华丽圣诞树 V8.0 (Bloom)</title>
+  <title>至尊华丽圣诞树 V9.0 Ultra</title>
   <style>
     body { margin:0; overflow:hidden; background:#000; font-family:"Microsoft YaHei",sans-serif; }
     #video-container{
-      position:fixed; width:68px; height:68px; bottom:18px; right:18px;
+      position:fixed; width:70px; height:70px; bottom:18px; right:18px;
       border-radius:50%; border:1px solid rgba(255,255,255,0.45);
       z-index:120; transform:scaleX(-1); overflow:hidden;
-      box-shadow: 0 0 18px rgba(255,255,255,0.15);
+      box-shadow: 0 0 22px rgba(255,255,255,0.18);
       backdrop-filter: blur(2px);
     }
     .text-overlay{
       position:fixed; top:14%; width:100%; text-align:center; color:#fff; pointer-events:none; z-index:110;
-      text-shadow: 0 0 14px rgba(255,235,59,0.95), 0 0 32px rgba(255,87,34,0.85);
-      font-size:1.65rem; font-weight:800; opacity:0; transition:opacity 1.5s;
+      text-shadow: 0 0 14px rgba(255,235,59,0.95), 0 0 34px rgba(255,87,34,0.85);
+      font-size:1.7rem; font-weight:900; opacity:0; transition:opacity 1.2s;
       letter-spacing:4px;
     }
     .hint{
       position:fixed; bottom:18px; left:18px; z-index:110;
-      color: rgba(255,255,255,0.6); font-size:12px; letter-spacing:1px;
+      color: rgba(255,255,255,0.62); font-size:12px; letter-spacing:1px;
       user-select:none;
     }
   </style>
 </head>
 <body>
   <div id="wish-text" class="text-overlay">✨ 祝你岁岁年年，万事胜意 ✨</div>
-  <div class="hint">提示：允许摄像头权限。检测到手后会点亮圣诞树。</div>
+  <div class="hint">提示：允许摄像头权限。检测到手后会点亮并“爆闪”成型。</div>
 
   <video id="input_video" style="display:none" playsinline></video>
   <div id="video-container"><canvas id="output_canvas" style="width:100%;height:100%"></canvas></div>
@@ -40,449 +40,533 @@
   <!-- Three.js r128 -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-  <!-- Postprocessing for r128 (non-module examples/js) -->
+  <!-- Postprocessing for r128 -->
   <script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
   <script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
   <script src="https://unpkg.com/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 
   <script>
-    // -----------------------------
-    // 0) 基础：场景 / 相机 / 渲染器
-    // -----------------------------
+    // =========================
+    // 0) Scene / Camera / Renderer
+    // =========================
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000000, 0.035);
+    scene.fog = new THREE.FogExp2(0x000000, 0.032);
 
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1200);
-    camera.position.set(0, 0, 26);
+    const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 1200);
+    camera.position.set(0, 0.2, 26);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.domElement.style.position = "fixed";
-    renderer.domElement.style.left = "0";
-    renderer.domElement.style.top = "0";
-    renderer.domElement.style.width = "100%";
-    renderer.domElement.style.height = "100%";
-    renderer.domElement.style.zIndex = "1";
+
+    // 关键：更漂亮的色调映射（高级感明显提升）
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+
+    renderer.domElement.style.position="fixed";
+    renderer.domElement.style.left="0";
+    renderer.domElement.style.top="0";
+    renderer.domElement.style.width="100%";
+    renderer.domElement.style.height="100%";
+    renderer.domElement.style.zIndex="1";
     document.body.appendChild(renderer.domElement);
 
-    // 后期：Bloom（华丽的关键）
+    // Bloom（主氛围）
     const composer = new THREE.EffectComposer(renderer);
     composer.addPass(new THREE.RenderPass(scene, camera));
     const bloomPass = new THREE.UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      1.25,   // strength
-      0.85,   // radius
-      0.12    // threshold
+      new THREE.Vector2(innerWidth, innerHeight),
+      1.25, 0.85, 0.12
     );
     composer.addPass(bloomPass);
 
-    // -----------------------------
-    // 1) 工具：柔边粒子贴图（自制）
-    // -----------------------------
-    function makeGlowTexture() {
+    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    const P_COUNT    = isMobile ? 10000 : 19000;   // 粒子灯
+    const BG_COUNT   = isMobile ? 1600  : 2600;    // 背景星尘
+    const DECOR_CNT  = isMobile ? 90    : 150;     // 装饰球
+    const SNOW_CNT   = isMobile ? 900   : 1600;    // 雪花
+    const GARLANDS   = 3;                          // 灯带条数（建议 2~4）
+
+    let isHand = false;
+    let lerpVal = 0;
+    let flash = 0; // 点亮“仪式感爆闪”
+
+    // 可选：true=必须捏合才点亮；false=有手就点亮
+    const USE_PINCH_TO_TRIGGER = false;
+
+    // =========================
+    // 1) 生成柔边贴图（光斑 & 雪）
+    // =========================
+    function glowTexture() {
       const c = document.createElement("canvas");
       c.width = 128; c.height = 128;
       const g = c.getContext("2d");
-      const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-      grad.addColorStop(0.0, "rgba(255,255,255,1)");
-      grad.addColorStop(0.25, "rgba(255,255,255,0.9)");
+      const grad = g.createRadialGradient(64,64,0, 64,64,64);
+      grad.addColorStop(0.00, "rgba(255,255,255,1)");
+      grad.addColorStop(0.22, "rgba(255,255,255,0.95)");
       grad.addColorStop(0.55, "rgba(255,255,255,0.35)");
-      grad.addColorStop(1.0, "rgba(255,255,255,0)");
+      grad.addColorStop(1.00, "rgba(255,255,255,0)");
       g.fillStyle = grad;
-      g.fillRect(0, 0, 128, 128);
+      g.fillRect(0,0,128,128);
       const tex = new THREE.CanvasTexture(c);
       tex.encoding = THREE.sRGBEncoding;
       return tex;
     }
-    const glowTex = makeGlowTexture();
+    const glowTex = glowTexture();
 
-    // -----------------------------
-    // 2) 核心配置：数量 / 状态
-    // -----------------------------
-    const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-    const P_COUNT = isMobile ? 9000 : 16000;     // 粒子总数
-    const DECOR_COUNT = isMobile ? 70 : 120;     // 装饰球数量
-    const SNOW_COUNT  = isMobile ? 900 : 1600;   // 雪花数量
-
-    let isHand = false;
-    let lerpVal = 0;
-
-    // “捏合触发”开关：true=必须捏合(拇指+食指靠近)才点亮；false=只要检测到手就点亮
-    const USE_PINCH_TO_TRIGGER = false;
-
-    // -----------------------------
-    // 3) 粒子：星海 <-> 圣诞树（渐变色 + 呼吸闪烁）
-    // -----------------------------
+    // =========================
+    // 2) 粒子：用 Shader 做“高级灯泡感”
+    // =========================
     const geom = new THREE.BufferGeometry();
-    const pos = new Float32Array(P_COUNT * 3);
-    const treePos = new Float32Array(P_COUNT * 3);
-    const starPos = new Float32Array(P_COUNT * 3);
-    const col = new Float32Array(P_COUNT * 3);
-    const twk = new Float32Array(P_COUNT); // 每个粒子的闪烁相位
+    const pos = new Float32Array(P_COUNT*3);
+    const treePos = new Float32Array(P_COUNT*3);
+    const starPos = new Float32Array(P_COUNT*3);
+    const color = new Float32Array(P_COUNT*3);
+    const size = new Float32Array(P_COUNT);
+    const phase = new Float32Array(P_COUNT);
 
-    const cBottom = new THREE.Color(0x00ffd5);  // 青绿（底部）
-    const cMid    = new THREE.Color(0x00ff3b);  // 明绿
-    const cTop    = new THREE.Color(0xfff4a3);  // 金白（顶部）
+    const cBottom = new THREE.Color(0x00ffd5);
+    const cMid    = new THREE.Color(0x00ff3b);
+    const cTop    = new THREE.Color(0xfff2a1);
 
-    for (let i = 0; i < P_COUNT; i++) {
-      // 树的目标位置（更“灯串绕树”的螺旋感）
-      const h = Math.random() * 16.5; // 0~16.5
-      const taper = (16.5 - h);
-      const r = taper * 0.32 * Math.pow(Math.random(), 0.65);
-      const twist = h * 1.85 + Math.random() * Math.PI * 2;
+    for (let i=0;i<P_COUNT;i++){
+      // Tree target (螺旋 + 锥形)
+      const h = Math.random()*16.8;
+      const taper = (16.8 - h);
+      const r = taper * 0.33 * Math.pow(Math.random(), 0.62);
+      const twist = h * 1.9 + Math.random()*Math.PI*2;
 
-      const tx = Math.cos(twist) * r;
-      const ty = (h - 8.2) + (Math.random() - 0.5) * 0.18;
-      const tz = Math.sin(twist) * r;
+      const tx = Math.cos(twist)*r;
+      const ty = (h - 8.25) + (Math.random()-0.5)*0.18;
+      const tz = Math.sin(twist)*r;
 
-      treePos[i*3]   = tx;
-      treePos[i*3+1] = ty;
-      treePos[i*3+2] = tz;
+      treePos[i*3]=tx; treePos[i*3+1]=ty; treePos[i*3+2]=tz;
 
-      // 初始星海位置（更远、更散）
-      const radius = 22 + Math.random() * 16;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(THREE.MathUtils.lerp(-1, 1, Math.random()));
-      const sx = radius * Math.sin(phi) * Math.cos(theta);
-      const sy = radius * Math.sin(phi) * Math.sin(theta);
-      const sz = radius * Math.cos(phi);
+      // Starfield start (更远更“宇宙”)
+      const radius = 24 + Math.random()*18;
+      const theta = Math.random()*Math.PI*2;
+      const phi = Math.acos(THREE.MathUtils.lerp(-1,1,Math.random()));
+      const sx = radius*Math.sin(phi)*Math.cos(theta);
+      const sy = radius*Math.sin(phi)*Math.sin(theta);
+      const sz = radius*Math.cos(phi);
 
-      starPos[i*3]   = sx;
-      starPos[i*3+1] = sy;
-      starPos[i*3+2] = sz;
+      starPos[i*3]=sx; starPos[i*3+1]=sy; starPos[i*3+2]=sz;
 
-      // 初始实际位置 = 星海
-      pos[i*3]   = sx;
-      pos[i*3+1] = sy;
-      pos[i*3+2] = sz;
+      pos[i*3]=sx; pos[i*3+1]=sy; pos[i*3+2]=sz;
 
-      // 颜色：按高度做渐变（底部绿 -> 顶部金白），并随机扰动
-      const t = THREE.MathUtils.clamp((ty + 8.2) / 16.5, 0, 1); // 0..1
+      // Height gradient color + subtle jitter
+      const t = THREE.MathUtils.clamp((ty+8.25)/16.8, 0, 1);
       const base = new THREE.Color();
-      if (t < 0.55) base.copy(cBottom).lerp(cMid, t / 0.55);
-      else base.copy(cMid).lerp(cTop, (t - 0.55) / 0.45);
+      if (t < 0.55) base.copy(cBottom).lerp(cMid, t/0.55);
+      else base.copy(cMid).lerp(cTop, (t-0.55)/0.45);
 
-      // 轻微随机（更像灯泡）
-      base.offsetHSL((Math.random()-0.5)*0.03, (Math.random()-0.5)*0.05, (Math.random()-0.5)*0.08);
+      base.offsetHSL((Math.random()-0.5)*0.03, (Math.random()-0.5)*0.06, (Math.random()-0.5)*0.10);
 
-      col[i*3]   = base.r;
-      col[i*3+1] = base.g;
-      col[i*3+2] = base.b;
+      color[i*3]=base.r; color[i*3+1]=base.g; color[i*3+2]=base.b;
 
-      twk[i] = Math.random() * Math.PI * 2;
+      // 每颗灯的大小与闪烁相位（更像一串串灯）
+      size[i] = (isMobile ? 13.0 : 12.0) * (0.65 + Math.random()*1.1);
+      phase[i] = Math.random()*Math.PI*2;
     }
 
-    geom.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    geom.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    geom.setAttribute("position", new THREE.BufferAttribute(pos,3));
+    geom.setAttribute("aColor", new THREE.BufferAttribute(color,3));
+    geom.setAttribute("aSize", new THREE.BufferAttribute(size,1));
+    geom.setAttribute("aPhase", new THREE.BufferAttribute(phase,1));
     geom.attributes.position.setUsage(THREE.DynamicDrawUsage);
 
-    const pointsMat = new THREE.PointsMaterial({
-      size: isMobile ? 0.17 : 0.14,
-      map: glowTex,
-      transparent: true,
-      depthWrite: false,
-      vertexColors: true,
-      blending: THREE.AdditiveBlending,
-      opacity: 0.9
+    const particleMat = new THREE.ShaderMaterial({
+      transparent:true,
+      depthWrite:false,
+      blending:THREE.AdditiveBlending,
+      uniforms:{
+        uTime:{value:0},
+        uTex:{value:glowTex},
+        uLerp:{value:0},
+        uFlash:{value:0}
+      },
+      vertexShader: `
+        attribute vec3 aColor;
+        attribute float aSize;
+        attribute float aPhase;
+        varying vec3 vColor;
+        varying float vPhase;
+        uniform float uTime;
+        uniform float uLerp;
+        uniform float uFlash;
+
+        void main(){
+          vColor = aColor;
+          vPhase = aPhase;
+
+          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+
+          // 点亮后更“呼吸”
+          float tw = sin(uTime*3.0 + aPhase) * (0.25 + 0.55*uLerp);
+          float pulse = 1.0 + tw*0.35 + uFlash*0.65;
+
+          // 透视缩放
+          gl_PointSize = aSize * pulse * (220.0 / -mvPosition.z);
+
+          gl_Position = projectionMatrix * mvPosition;
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D uTex;
+        uniform float uTime;
+        uniform float uLerp;
+        uniform float uFlash;
+        varying vec3 vColor;
+        varying float vPhase;
+
+        void main(){
+          vec2 uv = gl_PointCoord;
+          float mask = texture2D(uTex, uv).r;
+
+          // 细微闪烁：随机相位
+          float tw = 0.65 + 0.35*sin(uTime*4.2 + vPhase);
+          float alpha = mask * (0.55 + 0.55*uLerp) * tw;
+
+          // 点亮“爆闪”增强
+          alpha += uFlash * mask * 0.55;
+
+          gl_FragColor = vec4(vColor, alpha);
+        }
+      `
     });
 
-    const points = new THREE.Points(geom, pointsMat);
+    const points = new THREE.Points(geom, particleMat);
     scene.add(points);
 
-    // -----------------------------
-    // 4) 远景星尘（增加空间感）
-    // -----------------------------
+    // =========================
+    // 3) 背景星尘（更有空间感）
+    // =========================
     const bgGeom = new THREE.BufferGeometry();
-    const BG_COUNT = isMobile ? 1400 : 2400;
-    const bgPos = new Float32Array(BG_COUNT * 3);
-    const bgCol = new Float32Array(BG_COUNT * 3);
-
-    for (let i=0; i<BG_COUNT; i++){
-      const rr = 60 + Math.random()*120;
+    const bgPos = new Float32Array(BG_COUNT*3);
+    const bgCol = new Float32Array(BG_COUNT*3);
+    for(let i=0;i<BG_COUNT;i++){
+      const rr = 70 + Math.random()*140;
       const tt = Math.random()*Math.PI*2;
       const pp = Math.acos(THREE.MathUtils.lerp(-1,1,Math.random()));
       bgPos[i*3]   = rr*Math.sin(pp)*Math.cos(tt);
       bgPos[i*3+1] = rr*Math.sin(pp)*Math.sin(tt);
       bgPos[i*3+2] = rr*Math.cos(pp);
 
-      const c = new THREE.Color(0xffffff).offsetHSL(0, 0, -(Math.random()*0.25));
+      const c = new THREE.Color(0xffffff).offsetHSL(0,0,-(Math.random()*0.32));
       bgCol[i*3]=c.r; bgCol[i*3+1]=c.g; bgCol[i*3+2]=c.b;
     }
     bgGeom.setAttribute("position", new THREE.BufferAttribute(bgPos,3));
     bgGeom.setAttribute("color", new THREE.BufferAttribute(bgCol,3));
 
     const bg = new THREE.Points(bgGeom, new THREE.PointsMaterial({
-      size: 0.10,
-      map: glowTex,
+      size:0.11,
+      map:glowTex,
       transparent:true,
       depthWrite:false,
       vertexColors:true,
       blending:THREE.AdditiveBlending,
-      opacity:0.35
+      opacity:0.32
     }));
     scene.add(bg);
 
-    // -----------------------------
-    // 5) 树顶星：更亮 + 脉冲 + 光晕
-    // -----------------------------
-    function createStarMesh() {
+    // =========================
+    // 4) 灯带 Garland：TubeGeometry（“华丽感”的第二关键）
+    // =========================
+    function makeGarland(seed, yOffset, colorHex){
       const pts = [];
-      for (let i=0; i<10; i++){
-        const l = i%2===0 ? 1.05 : 0.45;
+      const loops = 7.8 + seed*0.8;
+      const yStart = -7.6 + yOffset;
+      const yEnd   = 7.4;
+      const steps  = 160;
+
+      for(let i=0;i<=steps;i++){
+        const t = i/steps;
+        const y = THREE.MathUtils.lerp(yStart, yEnd, t);
+        const h = (y - yStart) / (yEnd - yStart) * 16.8; // approximate
+        const radius = (16.8 - h) * 0.33 * (0.92 + 0.08*Math.sin(t*12.0));
+        const ang = t*loops*Math.PI*2 + seed*2.1;
+        const x = Math.cos(ang)*radius;
+        const z = Math.sin(ang)*radius;
+        pts.push(new THREE.Vector3(x, y, z));
+      }
+
+      const curve = new THREE.CatmullRomCurve3(pts);
+      const tube = new THREE.TubeGeometry(curve, 260, 0.055, 10, false);
+      const mat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        transparent:true,
+        opacity:0.0, // 随点亮再出现
+        blending:THREE.AdditiveBlending
+      });
+      const mesh = new THREE.Mesh(tube, mat);
+      mesh.renderOrder = 2;
+      return mesh;
+    }
+
+    const garlands = [];
+    const garlandColors = [0xff2a2a, 0xfff2a1, 0x4dd0ff, 0xb388ff];
+    for(let g=0; g<GARLANDS; g++){
+      const mesh = makeGarland(g+1, g*0.22, garlandColors[g % garlandColors.length]);
+      garlands.push(mesh);
+      scene.add(mesh);
+    }
+
+    // =========================
+    // 5) 树顶星：更亮 + 光晕
+    // =========================
+    function createTopStar(){
+      const pts = [];
+      for(let i=0;i<10;i++){
+        const l = i%2===0 ? 1.10 : 0.46;
         const a = (i/10)*Math.PI*2;
         pts.push(new THREE.Vector2(Math.cos(a)*l, Math.sin(a)*l));
       }
       const shape = new THREE.Shape(pts);
       const geo = new THREE.ShapeGeometry(shape);
-
-      const mat = new THREE.MeshBasicMaterial({
-        color: 0xfff3a1,
-        transparent: true,
-        opacity: 0.98,
-        side: THREE.DoubleSide
-      });
-
+      const mat = new THREE.MeshBasicMaterial({ color:0xfff3a1, side:THREE.DoubleSide, transparent:true, opacity:0.0 });
       const star = new THREE.Mesh(geo, mat);
-      star.scale.set(1.15, 1.15, 1.15);
-      star.position.set(0, 8.55, 0);
-      star.visible = false;
+      star.position.set(0, 8.65, 0);
 
-      // 光晕：用一个面片 + glowTex
-      const haloGeo = new THREE.PlaneGeometry(4.2, 4.2);
+      const haloGeo = new THREE.PlaneGeometry(4.8,4.8);
       const haloMat = new THREE.MeshBasicMaterial({
-        map: glowTex,
-        color: 0xfff1a8,
-        transparent: true,
-        opacity: 0.7,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
+        map:glowTex, color:0xfff1a8, transparent:true, opacity:0.0,
+        blending:THREE.AdditiveBlending, depthWrite:false
       });
       const halo = new THREE.Mesh(haloGeo, haloMat);
-      halo.position.set(0, 8.55, -0.2);
-      halo.visible = false;
+      halo.position.set(0, 8.65, -0.25);
 
-      return { star, halo };
+      return {star, halo};
     }
-
-    const top = createStarMesh();
+    const top = createTopStar();
     scene.add(top.star);
     scene.add(top.halo);
 
-    // -----------------------------
-    // 6) 装饰球：InstancedMesh + 自发光
-    // -----------------------------
-    const decorGroup = new THREE.Group();
+    // =========================
+    // 6) 装饰球：多色 + 自发光（更“富贵”）
+    // =========================
     const decorGeo = new THREE.SphereGeometry(0.19, 14, 14);
+    const decorMats = [
+      new THREE.MeshStandardMaterial({ color:0xff2a2a, emissive:0xff1a1a, emissiveIntensity:1.6, roughness:0.25, metalness:0.7 }),
+      new THREE.MeshStandardMaterial({ color:0xfff2a1, emissive:0xfff2a1, emissiveIntensity:1.05, roughness:0.22, metalness:0.75 }),
+      new THREE.MeshStandardMaterial({ color:0x4dd0ff, emissive:0x4dd0ff, emissiveIntensity:1.2, roughness:0.28, metalness:0.6 }),
+      new THREE.MeshStandardMaterial({ color:0xb388ff, emissive:0xb388ff, emissiveIntensity:1.1, roughness:0.30, metalness:0.62 }),
+    ];
 
-    const decorMat = new THREE.MeshStandardMaterial({
-      color: 0xff2a2a,
-      emissive: 0xff1a1a,
-      emissiveIntensity: 1.6,
-      roughness: 0.25,
-      metalness: 0.65
-    });
-
-    const decorMesh = new THREE.InstancedMesh(decorGeo, decorMat, DECOR_COUNT);
+    const decorGroup = new THREE.Group();
+    decorGroup.visible = false;
     const dummy = new THREE.Object3D();
 
-    for (let i=0; i<DECOR_COUNT; i++){
-      const h = 1.1 + Math.random()*14.8;
-      const r = (16.5 - h) * 0.31 * (0.82 + Math.random()*0.22);
-      const t = Math.random() * Math.PI * 2;
+    for(let m=0;m<decorMats.length;m++){
+      const count = Math.floor(DECOR_CNT / decorMats.length);
+      const inst = new THREE.InstancedMesh(decorGeo, decorMats[m], count);
+      for(let i=0;i<count;i++){
+        const h = 1.1 + Math.random()*14.9;
+        const r = (16.8 - h) * 0.31 * (0.80 + Math.random()*0.25);
+        const t = Math.random()*Math.PI*2;
 
-      dummy.position.set(Math.cos(t)*r, h - 8.2, Math.sin(t)*r);
-      dummy.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, 0);
-      const s = 0.85 + Math.random()*0.55;
-      dummy.scale.setScalar(s);
-      dummy.updateMatrix();
-      decorMesh.setMatrixAt(i, dummy.matrix);
+        dummy.position.set(Math.cos(t)*r, h - 8.25, Math.sin(t)*r);
+        dummy.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, 0);
+        dummy.scale.setScalar(0.80 + Math.random()*0.65);
+        dummy.updateMatrix();
+        inst.setMatrixAt(i, dummy.matrix);
+      }
+      inst.instanceMatrix.needsUpdate = true;
+      decorGroup.add(inst);
     }
-    decorMesh.instanceMatrix.needsUpdate = true;
-
-    decorGroup.add(decorMesh);
-    decorGroup.visible = false;
     scene.add(decorGroup);
 
-    // 灯光（让装饰球更像“珠光”）
-    const keyLight = new THREE.PointLight(0xffffff, 1.2, 120);
-    keyLight.position.set(8, 10, 18);
-    scene.add(keyLight);
+    // 灯光（让金属球“有质感”）
+    const key = new THREE.PointLight(0xffffff, 1.25, 140);
+    key.position.set(10, 10, 18);
+    scene.add(key);
 
-    const fillLight = new THREE.PointLight(0xfff2c2, 1.0, 120);
-    fillLight.position.set(-10, 6, 16);
-    scene.add(fillLight);
+    const fill = new THREE.PointLight(0xfff2c2, 1.05, 140);
+    fill.position.set(-12, 6, 16);
+    scene.add(fill);
 
-    // -----------------------------
-    // 7) 雪花层：氛围升级
-    // -----------------------------
+    // =========================
+    // 7) 雪花：更柔、更远近层次
+    // =========================
     const snowGeom = new THREE.BufferGeometry();
-    const snowPos = new Float32Array(SNOW_COUNT * 3);
-    const snowVel = new Float32Array(SNOW_COUNT);
-    for (let i=0; i<SNOW_COUNT; i++){
-      snowPos[i*3]   = (Math.random()-0.5)*70;
-      snowPos[i*3+1] = (Math.random()-0.5)*45;
-      snowPos[i*3+2] = (Math.random()-0.5)*70;
-      snowVel[i] = 0.04 + Math.random()*0.10;
+    const snowPos = new Float32Array(SNOW_CNT*3);
+    const snowVel = new Float32Array(SNOW_CNT);
+    const snowSz  = new Float32Array(SNOW_CNT);
+
+    for(let i=0;i<SNOW_CNT;i++){
+      snowPos[i*3]   = (Math.random()-0.5)*76;
+      snowPos[i*3+1] = (Math.random()-0.5)*48;
+      snowPos[i*3+2] = (Math.random()-0.5)*76;
+      snowVel[i] = 0.03 + Math.random()*0.12;
+      snowSz[i]  = 0.06 + Math.random()*0.14;
     }
     snowGeom.setAttribute("position", new THREE.BufferAttribute(snowPos,3));
     snowGeom.attributes.position.setUsage(THREE.DynamicDrawUsage);
 
     const snow = new THREE.Points(snowGeom, new THREE.PointsMaterial({
-      size: 0.12,
-      map: glowTex,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      opacity: 0.28,
-      color: 0xffffff
+      size:0.14,
+      map:glowTex,
+      transparent:true,
+      depthWrite:false,
+      blending:THREE.AdditiveBlending,
+      opacity:0.28,
+      color:0xffffff
     }));
     scene.add(snow);
 
-    // -----------------------------
-    // 8) 右下角摄像头预览（真正绘制视频）
-    // -----------------------------
+    // =========================
+    // 8) 摄像头预览（右下角圆）
+    // =========================
     const outCanvas = document.getElementById("output_canvas");
     const outCtx = outCanvas.getContext("2d");
     outCanvas.width = 480;
     outCanvas.height = 480;
-
     const videoElement = document.getElementById("input_video");
     function drawPreview(){
-      if (videoElement.readyState >= 2) {
-        outCtx.clearRect(0, 0, outCanvas.width, outCanvas.height);
-        outCtx.drawImage(videoElement, 0, 0, outCanvas.width, outCanvas.height);
+      if(videoElement.readyState >= 2){
+        outCtx.clearRect(0,0,outCanvas.width,outCanvas.height);
+        outCtx.drawImage(videoElement,0,0,outCanvas.width,outCanvas.height);
       }
     }
 
-    // -----------------------------
-    // 9) 手势识别：有手 /（可选）捏合触发
-    // -----------------------------
+    // =========================
+    // 9) Hand trigger（可选捏合）
+    // =========================
     const wishText = document.getElementById("wish-text");
 
-    function isPinching(landmarks){
-      // 拇指尖(4) 与 食指尖(8) 距离
-      const a = landmarks[4], b = landmarks[8];
-      const dx = a.x - b.x, dy = a.y - b.y;
-      const d = Math.sqrt(dx*dx + dy*dy);
-      return d < 0.06; // 阈值可调：越小越“必须捏更紧”
+    function isPinching(lm){
+      const a=lm[4], b=lm[8];
+      const dx=a.x-b.x, dy=a.y-b.y;
+      const d=Math.sqrt(dx*dx+dy*dy);
+      return d < 0.06;
     }
 
     const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-    hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
-
-    hands.onResults(res => {
-      const hasHand = res.multiHandLandmarks && res.multiHandLandmarks.length > 0;
-      if (!hasHand) { isHand = false; return; }
-
-      if (!USE_PINCH_TO_TRIGGER) {
-        isHand = true;
-        return;
-      }
-
-      // 捏合触发
-      const lm = res.multiHandLandmarks[0];
-      isHand = isPinching(lm);
+    hands.setOptions({
+      maxNumHands:1, modelComplexity:0,
+      minDetectionConfidence:0.6, minTrackingConfidence:0.6
     });
 
-    const cam = new Camera(videoElement, {
-      onFrame: async () => {
+    hands.onResults(res=>{
+      const hasHand = res.multiHandLandmarks && res.multiHandLandmarks.length>0;
+      if(!hasHand){ isHand=false; return; }
+      if(!USE_PINCH_TO_TRIGGER){ isHand=true; return; }
+      isHand = isPinching(res.multiHandLandmarks[0]);
+    });
+
+    const cam = new Camera(videoElement,{
+      onFrame: async ()=>{
         drawPreview();
-        await hands.send({ image: videoElement });
+        await hands.send({image: videoElement});
       },
-      width: 480, height: 480
+      width:480, height:480
     });
     cam.start();
 
-    // -----------------------------
-    // 10) 动画：更高级的“点亮过程”
-    // -----------------------------
+    // =========================
+    // 10) 动画：点亮“仪式感” + 全体联动
+    // =========================
     function animate(){
       requestAnimationFrame(animate);
-      const t = performance.now() * 0.001;
+      const t = performance.now()*0.001;
 
-      // 平滑开合：更丝滑
-      lerpVal = THREE.MathUtils.lerp(lerpVal, isHand ? 1 : 0, 0.045);
+      // 平滑点亮
+      const target = isHand ? 1 : 0;
+      const prev = lerpVal;
+      lerpVal = THREE.MathUtils.lerp(lerpVal, target, 0.045);
 
-      // 祝福文字：随点亮渐显
+      // “爆闪”触发：从暗到亮瞬间（更有高级仪式感）
+      if(prev < 0.15 && lerpVal > 0.20) flash = 1.0;
+      flash = Math.max(0, flash - 0.035);
+
+      // 祝福文字
       wishText.style.opacity = lerpVal.toFixed(3);
 
-      // 粒子从星海 -> 树，同时加入更柔的呼吸闪烁
+      // 粒子位置插值 + 轻微抖动（更像灯串）
       const p = geom.attributes.position;
-      for (let i=0; i<P_COUNT; i++){
-        const ix = i*3, iy = ix+1, iz = ix+2;
-
-        // 基础插值
+      for(let i=0;i<P_COUNT;i++){
+        const ix=i*3, iy=ix+1, iz=ix+2;
         let x = THREE.MathUtils.lerp(starPos[ix], treePos[ix], lerpVal);
         let y = THREE.MathUtils.lerp(starPos[iy], treePos[iy], lerpVal);
         let z = THREE.MathUtils.lerp(starPos[iz], treePos[iz], lerpVal);
 
-        // 呼吸闪烁：点亮后更明显
-        if (lerpVal > 0.35){
-          const w = (0.35 + 0.65*lerpVal);
-          const s = Math.sin(t*3.2 + twk[i]) * (0.018 * w);
+        if(lerpVal>0.35){
+          const w = 0.35 + 0.65*lerpVal;
+          const s = Math.sin(t*3.0 + phase[i]) * (0.020*w);
           x += s;
-          y += s * 0.9;
+          y += s*0.85;
+        }
+        // 爆闪时轻微外扩
+        if(flash>0){
+          const k = flash*0.06;
+          x += (x)*k;
+          z += (z)*k;
         }
 
-        p.array[ix] = x;
-        p.array[iy] = y;
-        p.array[iz] = z;
+        p.array[ix]=x; p.array[iy]=y; p.array[iz]=z;
       }
-      p.needsUpdate = true;
+      p.needsUpdate=true;
 
-      // 树顶星与装饰球出现阈值 + 脉冲
+      // Shader uniforms
+      particleMat.uniforms.uTime.value = t;
+      particleMat.uniforms.uLerp.value = lerpVal;
+      particleMat.uniforms.uFlash.value = flash;
+
+      // 灯带出现（越亮越明显）
+      for(const g of garlands){
+        g.material.opacity = Math.min(0.95, Math.max(0.0, (lerpVal-0.55)*2.2)) * (0.75 + flash*0.25);
+      }
+
+      // 星星出现 + 脉冲
       const starOn = lerpVal > 0.78;
-      top.star.visible = starOn;
-      top.halo.visible = starOn;
-
-      if (starOn){
+      top.star.material.opacity = starOn ? 0.98 : 0.0;
+      top.halo.material.opacity = starOn ? (0.55 + Math.sin(t*2.2)*0.16 + flash*0.35) : 0.0;
+      if(starOn){
         top.star.rotation.y += 0.045;
-        const pulse = 0.85 + Math.sin(t*2.4) * 0.12;
-        top.star.scale.setScalar(1.15 * pulse);
-        top.halo.material.opacity = 0.55 + Math.sin(t*2.2) * 0.15;
+        const pulse = 0.90 + Math.sin(t*2.4)*0.12 + flash*0.12;
+        top.star.scale.setScalar(1.20*pulse);
       }
 
+      // 装饰球
       decorGroup.visible = lerpVal > 0.88;
-      if (decorGroup.visible){
-        // 让装饰球轻微“闪”
-        decorMat.emissiveIntensity = 1.35 + (Math.sin(t*3.0)*0.35);
+      if(decorGroup.visible){
+        const em = 1.15 + Math.sin(t*3.1)*0.25 + flash*0.4;
+        decorMats.forEach((m,idx)=> m.emissiveIntensity = em*(idx===1 ? 0.9 : 1.1));
       }
 
-      // 雪花下落
+      // 雪花
       const sp = snowGeom.attributes.position;
-      for (let i=0; i<SNOW_COUNT; i++){
-        const iy = i*3+1;
-        sp.array[iy] -= snowVel[i];
-        // 轻微飘动
-        sp.array[i*3] += Math.sin(t*0.7 + i) * 0.002;
-        if (sp.array[iy] < -28) sp.array[iy] = 28;
+      for(let i=0;i<SNOW_CNT;i++){
+        sp.array[i*3+1] -= snowVel[i];
+        sp.array[i*3]   += Math.sin(t*0.7 + i)*0.0022;
+        sp.array[i*3+2] += Math.cos(t*0.55 + i)*0.0016;
+        if(sp.array[i*3+1] < -30) sp.array[i*3+1] = 30;
       }
-      sp.needsUpdate = true;
+      sp.needsUpdate=true;
 
-      // 镜头轻微漂移（高级感）
-      camera.position.x = Math.sin(t*0.22) * 0.55;
-      camera.position.y = Math.sin(t*0.18) * 0.25;
-      camera.lookAt(0, 0.6, 0);
+      // 镜头轻微漂移（高级）
+      camera.position.x = Math.sin(t*0.22)*0.6;
+      camera.position.y = 0.2 + Math.sin(t*0.18)*0.25;
+      camera.lookAt(0, 0.7, 0);
 
-      // 旋转：树本体很慢，背景更慢
-      points.rotation.y += 0.0026;
-      bg.rotation.y += 0.0008;
+      // 旋转
+      points.rotation.y += 0.0024;
+      bg.rotation.y += 0.0009;
 
-      // Bloom 强度随点亮变化（更“从暗到亮”）
-      bloomPass.strength = 0.35 + lerpVal * 1.25;
-      bloomPass.radius = 0.65 + lerpVal * 0.45;
+      // Bloom 联动（点亮时更“华丽”）
+      bloomPass.strength = 0.35 + lerpVal*1.35 + flash*0.55;
+      bloomPass.radius   = 0.65 + lerpVal*0.45;
+      bloomPass.threshold= 0.10 + (1.0-lerpVal)*0.05;
 
       composer.render();
     }
     animate();
 
-    window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+    addEventListener("resize", ()=>{
+      camera.aspect = innerWidth/innerHeight;
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      composer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setSize(innerWidth, innerHeight);
+      composer.setSize(innerWidth, innerHeight);
     });
   </script>
 </body>
